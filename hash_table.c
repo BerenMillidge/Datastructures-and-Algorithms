@@ -30,6 +30,8 @@ typedef struct {
 } ht_hash_table;
 
 
+static ht_item HT_DELETED_ITEM = {NULL, NULL};
+
 // functions ofvarious keinds. they are static as onl ever called by hash table internal code
 
 //creates a new hash table item
@@ -106,7 +108,13 @@ void ht_insert(ht_hash_table* ht, const char* key, const char* value){
 	ht_item* cur_item = ht->items[index];
 	int i = 1;
 	// i.e. if there is a collision
-	while(cur_item!=NULl){
+	while(cur_item!=NULl &&cur_item!= &HT_DELETED_ITEM){
+		//if it already exists, update
+		if(strcmp(cur_item->key, key)==0){
+			ht_del_item(cur_item);
+			ht->items[index]=item;
+			return;
+		}
 		// this is the multiple hash chaining
 		index = ht_get_hash(item->key, ht->size, i);
 		cur_item = ht->items[index];
@@ -122,17 +130,20 @@ char* ht_search(ht_hash_table* ht, const char* key){
 	int index = ht_get_hash(key, ht->size, 0);
 	ht_item* item = ht->items[index];
 	int i = 1;
-	while (item!=NUL){
+	while (item!=NUL) {
+		if(item!=&HT_DELETED_ITEM){
 		// if the item is correct!
 		if(strcmp(item->key, key)==0){
 			//jsut return
 			return item->value;
 		}
+	}
 		//if not hash again until you find it
 		index = ht_get_hash(key, ht->size, i);
 		item = ht->items[index];
 		i++;
 	}
+
 	return NULL;
 }
 
@@ -141,7 +152,6 @@ char* ht_search(ht_hash_table* ht, const char* key){
 // so instead just replace it with a pointer to a sentinel items
 // that represents deleted items, thus marking it deleted
 
-static ht_item HT_DELETED_ITEM = {NULL, NULL};
 
 void ht_delete(ht_hash_table* ht, const char* key){
 	int index = ht_get_hash(key, ht->size, 0);
