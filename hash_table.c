@@ -31,6 +31,9 @@ typedef struct {
 
 
 static ht_item HT_DELETED_ITEM = {NULL, NULL};
+static const int HIGH_LOAD_FRACTION = 70;
+static const int LOW_LOAD_FRACTION = 10;
+static const int HT_INITIAL_BASE_SIZE = 53;
 
 // functions ofvarious keinds. they are static as onl ever called by hash table internal code
 
@@ -44,7 +47,7 @@ static ht_item* ht_new_item(const char* k, const char* v){
 }
 
 //create a new hash table
-static ht_hash_table* ht_new(){
+static ht_hash_table* ht_new_old(){
 	ht_hash_table* ht = malloc(sizeof(ht_hash_table));
 
 	//define size to 53 at the start forsome reason
@@ -100,6 +103,12 @@ static int ht_get_hash(const char* s, const int num_buckets, const int attempt){
 // okay, now there need to befunctions for inserting updating and deleting the hash table
 
 void ht_insert(ht_hash_table* ht, const char* key, const char* value){
+	// check load and upsize if it istoo large
+	const int load = ht->count * 100 / ht->size;
+	if (load > HIGH_LOAD_FRACTION){
+
+		ht_resize_up(ht);
+	}
 	//create item
 	ht_item* item = ht_new_item(key, value);
 	//get index
@@ -154,6 +163,13 @@ char* ht_search(ht_hash_table* ht, const char* key){
 
 
 void ht_delete(ht_hash_table* ht, const char* key){
+
+	// downsize if smaler
+	const int load = ht->count * 100 / ht->size;
+	if (load < 10){
+		ht_resize_down(ht);
+	}
+	
 	int index = ht_get_hash(key, ht->size, 0);
 	ht_item* item = ht->items[index];
 	int i = 1;
@@ -172,4 +188,60 @@ void ht_delete(ht_hash_table* ht, const char* key){
 		i++;
 	}
 	ht->count--;
+}
+
+// okay, to resize hash table, first needs to create a hashtbale of a certain size
+static ht_hash_table* ht_new_sized(const int base_size){
+	ht_hash_table* ht = malloc(sizeof(ht_hash_table));
+	ht->base_size = base_size;
+
+	//set the size to the next prime above the base size, should not be that many!
+	ht->size = next_prime(ht->base_size);
+	ht->count = 0;
+	ht->items = calloc((size_t)ht->size, sizeof(ht_item*));
+	return ht;
+}
+
+ht_hash_table* ht_new(){
+	return ht_new_sized(HT_INITIAL_BASE_SIZE);
+}
+
+//okay, now for the resize function
+
+static void ht_resize(ht_hash_table* ht, const int base_size){
+	// don't try to resize below the minimum base size
+	if(base_size < HT_INITIAL_BASE_SIZE){
+		return;
+	}
+	//create new hash table with new size
+	ht_hash_table* new_ht = ht_new_sized(base_size);
+	//copy memory accross
+	for (int i = 0; i<ht->size; i++){
+		ht_item* item = ht->items[i];
+		if(item!=NULL && item!=&HT_DELETED_ITEM){
+			ht_insert(new_ht, item->key, item->value);
+		}
+	}
+
+	ht_base_size = new_ht->base_size;
+	ht->count = new_ht->count;
+	//to delete new ht give it hts size and items
+	const int tmp_size = ht->size;
+	ht->size = new_ht->size;
+	new_ht->size = tmp_size;
+
+	ht_item** tmp_items=ht->items;
+	ht->items = new_ht->items;
+	new_ht->items = tmp_items;
+	ht_del_hash_table(new_ht);
+}
+
+//define two functions for resizing up and down
+static void ht_resize_up(ht_hash_table* ht){
+	const int new_size = ht->base_size *2l
+	ht_resize(ht, new_size);
+}
+static void ht_resize_down(ht_hash_table* ht){
+	const int new_size = ht->base_size/2;
+	ht_resize(ht, new_size);
 }
